@@ -1,0 +1,15 @@
+/home/logntsu/Downloads/test/bin/Debug/net6.0-windows/SteganoAES
+/home/logntsu/Downloads/test/bin/Debug/net6.0-windows/SteganoAES.deps.json
+/home/logntsu/Downloads/test/bin/Debug/net6.0-windows/SteganoAES.runtimeconfig.json
+/home/logntsu/Downloads/test/bin/Debug/net6.0-windows/SteganoAES.dll
+/home/logntsu/Downloads/test/bin/Debug/net6.0-windows/SteganoAES.pdb
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.csproj.AssemblyReference.cache
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.GeneratedMSBuildEditorConfig.editorconfig
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.AssemblyInfoInputs.cache
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.AssemblyInfo.cs
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.csproj.CoreCompileInputs.cache
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.dll
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/refint/SteganoAES.dll
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.pdb
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/SteganoAES.genruntimeconfig.cache
+/home/logntsu/Downloads/test/obj/Debug/net6.0-windows/ref/SteganoAES.dll

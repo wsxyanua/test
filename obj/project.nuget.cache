@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "dgSpecHash": "FbUdBKpP5Lyyyza67BBxXUSdgpPKGliFrgMbrRSUU4haE04F0iFauIKYVwMqf4XdsYq4NiieJB5CFcqQTZiayg==",
+  "success": true,
+  "projectFilePath": "/home/logntsu/Downloads/test/SteganoAES.csproj",
+  "expectedPackageFiles": [
+    "/home/logntsu/.nuget/packages/microsoft.win32.systemevents/6.0.0/microsoft.win32.systemevents.6.0.0.nupkg.sha512",
+    "/home/logntsu/.nuget/packages/system.drawing.common/6.0.0/system.drawing.common.6.0.0.nupkg.sha512",
+    "/home/logntsu/.nuget/packages/microsoft.netcore.app.ref/6.0.8/microsoft.netcore.app.ref.6.0.8.nupkg.sha512",
+    "/home/logntsu/.nuget/packages/microsoft.windowsdesktop.app.ref/6.0.8/microsoft.windowsdesktop.app.ref.6.0.8.nupkg.sha512",
+    "/home/logntsu/.nuget/packages/microsoft.aspnetcore.app.ref/6.0.8/microsoft.aspnetcore.app.ref.6.0.8.nupkg.sha512",
+    "/home/logntsu/.nuget/packages/microsoft.netcore.app.host.linux-x64/6.0.8/microsoft.netcore.app.host.linux-x64.6.0.8.nupkg.sha512"
+  ],
+  "logs": []
+}
