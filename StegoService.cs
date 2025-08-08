@@ -1,115 +1,98 @@
 using System;
+using System.Collections;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 
 namespace SteganoAES
 {
-    public static class StegoService
+    public class StegoService
     {
-        public static Bitmap EmbedData(Bitmap image, byte[] data)
+        private const int BitsPerChannel = 1;
+        private const int ChannelsPerPixel = 3; // R, G, B
+
+        public Bitmap Embed(Bitmap image, byte[] blob)
         {
-            // Kiểm tra xem ảnh có đủ dung lượng không
-            if (data.Length * 8 > image.Width * image.Height * 3)
+            long requiredBits = blob.Length * 8L;
+            long capacity = image.Width * image.Height * ChannelsPerPixel * BitsPerChannel;
+
+            if (requiredBits > capacity)
             {
-                throw new ArgumentException("Ảnh không đủ dung lượng để chứa dữ liệu");
+                throw new ArgumentException("The image does not have enough capacity to hold the data.");
             }
 
-            // Tạo một bản sao của ảnh để không thay đổi ảnh gốc
-            Bitmap stegoBitmap = new Bitmap(image.Width, image.Height, PixelFormat.Format24bppRgb);
-            using (Graphics g = Graphics.FromImage(stegoBitmap))
+            Bitmap newImage = new Bitmap(image);
+            BitArray bitBlob = new BitArray(blob);
+            int bitIndex = 0;
+
+            for (int y = 0; y < newImage.Height && bitIndex < bitBlob.Length; y++)
             {
-                g.DrawImage(image, 0, 0);
-            }
-
-            // Lock vùng bitmap để truy cập trực tiếp
-            BitmapData stegoData = stegoBitmap.LockBits(
-                new Rectangle(0, 0, stegoBitmap.Width, stegoBitmap.Height),
-                ImageLockMode.ReadWrite,
-                PixelFormat.Format24bppRgb);
-
-            int stride = stegoData.Stride;
-            IntPtr scan0 = stegoData.Scan0;
-
-            unsafe
-            {
-                byte* ptr = (byte*)scan0;
-                int bitIndex = 0;
-
-                // Nhúng độ dài của dữ liệu trước (4 bytes = 32 bits)
-                int length = data.Length;
-                for (int i = 0; i < 32; i++)
+                for (int x = 0; x < newImage.Width && bitIndex < bitBlob.Length; x++)
                 {
-                    bool bit = (length & (1 << (31 - i))) != 0;
-                    ptr[bitIndex / 3] = (byte)((ptr[bitIndex / 3] & 0xFE) | (bit ? 1 : 0));
-                    bitIndex += 3;
-                }
+                    Color pixel = newImage.GetPixel(x, y);
+                    int r = pixel.R;
+                    int g = pixel.G;
+                    int b = pixel.B;
 
-                // Nhúng dữ liệu
-                for (int byteIndex = 0; byteIndex < data.Length; byteIndex++)
-                {
-                    byte b = data[byteIndex];
-                    for (int i = 0; i < 8; i++)
+                    if (bitIndex < bitBlob.Length)
                     {
-                        bool bit = (b & (1 << (7 - i))) != 0;
-                        ptr[bitIndex / 3] = (byte)((ptr[bitIndex / 3] & 0xFE) | (bit ? 1 : 0));
-                        bitIndex += 3;
+                        r = SetLsb(r, bitBlob[bitIndex++]);
                     }
+                    if (bitIndex < bitBlob.Length)
+                    {
+                        g = SetLsb(g, bitBlob[bitIndex++]);
+                    }
+                    if (bitIndex < bitBlob.Length)
+                    {
+                        b = SetLsb(b, bitBlob[bitIndex++]);
+                    }
+
+                    newImage.SetPixel(x, y, Color.FromArgb(pixel.A, r, g, b));
                 }
             }
 
-            stegoBitmap.UnlockBits(stegoData);
-            return stegoBitmap;
+            return newImage;
         }
 
-        public static byte[] ExtractData(Bitmap image)
+        public byte[] Extract(Bitmap image, int blobSizeInBytes)
         {
-            BitmapData imageData = image.LockBits(
-                new Rectangle(0, 0, image.Width, image.Height),
-                ImageLockMode.ReadOnly,
-                PixelFormat.Format24bppRgb);
+            int totalBitsToExtract = blobSizeInBytes * 8;
+            BitArray extractedBits = new BitArray(totalBitsToExtract);
+            int bitIndex = 0;
 
-            int stride = imageData.Stride;
-            IntPtr scan0 = imageData.Scan0;
-            byte[] extractedData;
-
-            unsafe
+            for (int y = 0; y < image.Height && bitIndex < totalBitsToExtract; y++)
             {
-                byte* ptr = (byte*)scan0;
-                int bitIndex = 0;
-
-                // Đọc độ dài dữ liệu (32 bits đầu tiên)
-                int length = 0;
-                for (int i = 0; i < 32; i++)
+                for (int x = 0; x < image.Width && bitIndex < totalBitsToExtract; x++)
                 {
-                    bool bit = (ptr[bitIndex / 3] & 1) == 1;
-                    if (bit) length |= (1 << (31 - i));
-                    bitIndex += 3;
-                }
+                    Color pixel = image.GetPixel(x, y);
 
-                if (length <= 0 || length > (image.Width * image.Height * 3 - 32) / 8)
-                {
-                    throw new ArgumentException("Dữ liệu không hợp lệ hoặc ảnh bị hỏng");
-                }
-
-                extractedData = new byte[length];
-
-                // Đọc dữ liệu
-                for (int byteIndex = 0; byteIndex < length; byteIndex++)
-                {
-                    byte b = 0;
-                    for (int i = 0; i < 8; i++)
+                    if (bitIndex < totalBitsToExtract)
                     {
-                        bool bit = (ptr[bitIndex / 3] & 1) == 1;
-                        if (bit) b |= (byte)(1 << (7 - i));
-                        bitIndex += 3;
+                        extractedBits[bitIndex++] = GetLsb(pixel.R);
                     }
-                    extractedData[byteIndex] = b;
+                    if (bitIndex < totalBitsToExtract)
+                    {
+                        extractedBits[bitIndex++] = GetLsb(pixel.G);
+                    }
+                    if (bitIndex < totalBitsToExtract)
+                    {
+                        extractedBits[bitIndex++] = GetLsb(pixel.B);
+                    }
                 }
             }
 
-            image.UnlockBits(imageData);
-            return extractedData;
+            byte[] extractedBytes = new byte[blobSizeInBytes];
+            extractedBits.CopyTo(extractedBytes, 0);
+            return extractedBytes;
+        }
+
+        private int SetLsb(int value, bool bit)
+        {
+            return bit ? (value | 1) : (value & ~1);
+        }
+
+        private bool GetLsb(int value)
+        {
+            return (value & 1) == 1;
         }
     }
 }

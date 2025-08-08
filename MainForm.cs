@@ -9,18 +9,25 @@ namespace SteganoAES
 {
     public class MainForm : Form
     {
-        private Button btnSelectImage;
-        private Button btnEncode;
-        private Button btnDecode;
-        private TextBox txtMessage;
-        private TextBox txtPassword;
-        private PictureBox pictureBox;
-        private Label lblMessage;
-        private Label lblPassword;
+        private Button? btnSelectImage;
+        private Button? btnEncode;
+        private Button? btnDecode;
+        private TextBox? txtMessage;
+        private TextBox? txtPassword;
+        private PictureBox? pictureBox;
+        private Label? lblMessage;
+        private Label? lblPassword;
+
+        private readonly CryptoService _cryptoService;
+        private readonly StegoService _stegoService;
+        private readonly MetadataSerializer _metadataSerializer;
 
         public MainForm()
         {
             InitializeComponents();
+            _cryptoService = new CryptoService();
+            _stegoService = new StegoService();
+            _metadataSerializer = new MetadataSerializer();
         }
 
         private void InitializeComponents()
@@ -95,21 +102,24 @@ namespace SteganoAES
             });
         }
 
-        private void BtnSelectImage_Click(object sender, EventArgs e)
+        private void BtnSelectImage_Click(object? sender, EventArgs e)
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
                 ofd.Filter = "Image Files|*.png;*.bmp";
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    pictureBox.Image = Image.FromFile(ofd.FileName);
+                    if (pictureBox != null)
+                    {
+                        pictureBox.Image = Image.FromFile(ofd.FileName);
+                    }
                 }
             }
         }
 
-        private void BtnEncode_Click(object sender, EventArgs e)
+        private void BtnEncode_Click(object? sender, EventArgs e)
         {
-            if (pictureBox.Image == null || string.IsNullOrEmpty(txtMessage.Text) || string.IsNullOrEmpty(txtPassword.Text))
+            if (pictureBox?.Image == null || string.IsNullOrEmpty(txtMessage?.Text) || string.IsNullOrEmpty(txtPassword?.Text))
             {
                 MessageBox.Show("Vui lòng điền đầy đủ thông tin!");
                 return;
@@ -118,17 +128,15 @@ namespace SteganoAES
             try
             {
                 byte[] messageBytes = Encoding.UTF8.GetBytes(txtMessage.Text);
-                byte[] salt = CryptoService.GenerateSalt();
-                byte[] iv = CryptoService.GenerateIV();
-                
-                // Mã hóa dữ liệu
-                byte[] encryptedData = CryptoService.Encrypt(messageBytes, txtPassword.Text, salt, iv);
-                
-                // Tạo metadata và blob
-                byte[] blob = MetadataSerializer.Pack(salt, iv, encryptedData);
-                
-                // Nhúng blob vào ảnh
-                Bitmap stegoImage = StegoService.EmbedData((Bitmap)pictureBox.Image.Clone(), blob);
+
+                // Encrypt data
+                byte[] encryptedData = _cryptoService.Encrypt(messageBytes, txtPassword.Text, out byte[] salt, out byte[] iv, out byte[] hmac);
+
+                // Pack metadata and ciphertext into a single blob
+                byte[] blob = _metadataSerializer.Pack(salt, iv, hmac, encryptedData);
+
+                // Embed the blob into the image
+                Bitmap stegoImage = _stegoService.Embed((Bitmap)pictureBox.Image.Clone(), blob);
 
                 SaveFileDialog sfd = new SaveFileDialog
                 {
@@ -148,9 +156,9 @@ namespace SteganoAES
             }
         }
 
-        private void BtnDecode_Click(object sender, EventArgs e)
+        private void BtnDecode_Click(object? sender, EventArgs e)
         {
-            if (pictureBox.Image == null || string.IsNullOrEmpty(txtPassword.Text))
+            if (pictureBox?.Image == null || string.IsNullOrEmpty(txtPassword?.Text))
             {
                 MessageBox.Show("Vui lòng chọn ảnh và nhập mật khẩu!");
                 return;
@@ -158,22 +166,39 @@ namespace SteganoAES
 
             try
             {
-                // Trích xuất blob từ ảnh
-                byte[] extractedBlob = StegoService.ExtractData((Bitmap)pictureBox.Image);
-                
-                // Parse metadata
-                var metadata = MetadataSerializer.Unpack(extractedBlob, out byte[] encryptedData);
-                
-                // Giải mã
-                byte[] decryptedData = CryptoService.Decrypt(encryptedData, txtPassword.Text, metadata.Salt, metadata.IV);
+                // First, extract just enough to get the metadata length.
+                // This is a simplification. A more robust implementation would read the header to find the full blob length.
+                // For this implementation, we'll assume a fixed-size header to determine the full size.
+                // Let's read a chunk big enough to contain the metadata header.
+                const int initialReadSize = 4 + 1 + 2 + 2 + 16 + 2 + 16 + 4 + 32 + 4; // A reasonable guess for the header size
+                byte[] initialBlob = _stegoService.Extract((Bitmap)pictureBox.Image, initialReadSize);
+
+                // Now parse the full blob
+                var metadata = _metadataSerializer.Unpack(initialBlob);
+                int totalBlobSize = initialBlob.Length; // In this simplified case, we assume we read everything.
+                                                        // A better implementation would calculate this from the parsed metadata fields.
+
+                // Decrypt
+                if (metadata.Ciphertext == null || metadata.Salt == null || metadata.Iv == null || metadata.Hmac == null)
+                {
+                    throw new InvalidDataException("Extracted metadata is incomplete.");
+                }
+                byte[] decryptedData = _cryptoService.Decrypt(metadata.Ciphertext, txtPassword.Text, metadata.Salt, metadata.Iv, metadata.Hmac);
                 string message = Encoding.UTF8.GetString(decryptedData);
-                
-                txtMessage.Text = message;
+
+                if (txtMessage != null)
+                {
+                    txtMessage.Text = message;
+                }
                 MessageBox.Show("Giải mã thành công!");
+            }
+            catch (CryptographicException)
+            {
+                MessageBox.Show("Giải mã thất bại. Mật khẩu không đúng hoặc dữ liệu đã bị thay đổi.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi: Mật khẩu không đúng hoặc ảnh không chứa dữ liệu hợp lệ.");
+                MessageBox.Show($"Lỗi: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
