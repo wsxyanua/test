@@ -166,19 +166,38 @@ namespace SteganoAES
 
             try
             {
-                // First, extract just enough to get the metadata length.
-                // This is a simplification. A more robust implementation would read the header to find the full blob length.
-                // For this implementation, we'll assume a fixed-size header to determine the full size.
-                // Let's read a chunk big enough to contain the metadata header.
-                const int initialReadSize = 4 + 1 + 2 + 2 + 16 + 2 + 16 + 4 + 32 + 4; // A reasonable guess for the header size
-                byte[] initialBlob = _stegoService.Extract((Bitmap)pictureBox.Image, initialReadSize);
+                Bitmap image = (Bitmap)pictureBox.Image;
 
-                // Now parse the full blob
-                var metadata = _metadataSerializer.Unpack(initialBlob);
-                int totalBlobSize = initialBlob.Length; // In this simplified case, we assume we read everything.
-                                                        // A better implementation would calculate this from the parsed metadata fields.
+                // Step 1: Read a fixed-size header to determine the total size of the payload.
+                // The header contains: Magic(4) + Ver(1) + Flags(2) + SaltLen(2) + Salt(16) + IVLen(2) + IV(16) + HmacLen(4) + Hmac(32) + CiphertextLen(4)
+                const int headerSizeToReadLengths = 83;
+                byte[] headerBytes = _stegoService.Extract(image, headerSizeToReadLengths);
 
-                // Decrypt
+                int ciphertextLength;
+                using (var ms = new MemoryStream(headerBytes))
+                using (var reader = new BinaryReader(ms))
+                {
+                    // Skip fields before the ciphertext length
+                    reader.BaseStream.Seek(4 + 1 + 2, SeekOrigin.Current); // Magic, Version, Flags
+                    ushort saltLength = reader.ReadUInt16();
+                    reader.BaseStream.Seek(saltLength, SeekOrigin.Current); // Salt
+                    ushort ivLength = reader.ReadUInt16();
+                    reader.BaseStream.Seek(ivLength, SeekOrigin.Current); // IV
+                    int hmacLength = reader.ReadInt32();
+                    reader.BaseStream.Seek(hmacLength, SeekOrigin.Current); // HMAC
+
+                    // Read the ciphertext length
+                    ciphertextLength = reader.ReadInt32();
+                }
+
+                // Step 2: Calculate the full blob size and extract it.
+                int totalBlobSize = headerSizeToReadLengths + ciphertextLength;
+                byte[] fullBlob = _stegoService.Extract(image, totalBlobSize);
+
+                // Step 3: Unpack the full blob.
+                var metadata = _metadataSerializer.Unpack(fullBlob);
+
+                // Step 4: Decrypt.
                 if (metadata.Ciphertext == null || metadata.Salt == null || metadata.Iv == null || metadata.Hmac == null)
                 {
                     throw new InvalidDataException("Extracted metadata is incomplete.");
